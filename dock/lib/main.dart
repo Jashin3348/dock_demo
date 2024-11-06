@@ -29,8 +29,8 @@ class _DockDemoState extends State<DockDemo> {
     Icons.favorite,
   ];
 
-  Map<int, Offset> iconPositions = {};
-  List<int?> dockSlots = List.generate(5, (index) => index); // Fixed slots in dock
+  Map<int, Offset> iconPositions = {}; // Track floating icon positions
+  List<int> dockSlots = [0, 1, 2, 3, 4]; // Track icons in dock by index
   int? draggedIndex;
 
   @override
@@ -44,7 +44,7 @@ class _DockDemoState extends State<DockDemo> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               height: 100,
-              width: dockSlots.where((slot) => slot != null).length * 70.0,
+              width: dockSlots.length * 70.0,
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(30),
@@ -52,11 +52,14 @@ class _DockDemoState extends State<DockDemo> {
                   BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
                 ],
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(dockSlots.length, (slotIndex) {
-                  return _buildDockSlot(slotIndex);
-                }),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(dockSlots.length, (slotIndex) {
+                    return _buildDockSlot(slotIndex);
+                  }),
+                ),
               ),
             ),
           ),
@@ -77,8 +80,11 @@ class _DockDemoState extends State<DockDemo> {
     return DragTarget<int>(
       onAccept: (fromIndex) {
         setState(() {
-          // Place the icon in the specific slot
-          dockSlots[slotIndex] = fromIndex;
+          // Remove icon from floating and add it to dock in this slot
+          if (!dockSlots.contains(fromIndex)) {
+            dockSlots.add(fromIndex);
+            dockSlots.sort(); // Ensure dock slots remain ordered
+          }
           iconPositions.remove(fromIndex);
         });
       },
@@ -87,7 +93,7 @@ class _DockDemoState extends State<DockDemo> {
           width: 70,
           height: 70,
           alignment: Alignment.center,
-          child: iconIndex != null
+          child: iconIndex != null && dockSlots.contains(iconIndex)
               ? _buildDraggableIcon(iconIndex, inDock: true)
               : const SizedBox.shrink(),
         );
@@ -113,8 +119,8 @@ class _DockDemoState extends State<DockDemo> {
       onDragEnd: (details) {
         setState(() {
           if (inDock) {
-            // Remove from dock and add to floating positions
-            dockSlots[dockSlots.indexOf(index)] = null;
+            // Remove from dock and place in floating positions
+            dockSlots.remove(index);
             iconPositions[index] = details.offset;
           } else {
             // Check if icon should snap back to dock
@@ -130,22 +136,18 @@ class _DockDemoState extends State<DockDemo> {
   }
 
   void _snapToDockOrKeepPosition(int index, Offset offset) {
-    // Determine if the icon is near enough to the dock to snap back
+    // Check if the icon is near enough to the dock to snap back
     final dockCenterY = MediaQuery.of(context).size.height - 120; // Adjust based on dock height
-    final dockCenterX = MediaQuery.of(context).size.width / 2;
     bool isNearDock = (offset.dy > dockCenterY - 50 && offset.dy < dockCenterY + 50);
 
     if (isNearDock) {
-      // Find the first empty slot and snap the icon to it
-      for (int i = 0; i < dockSlots.length; i++) {
-        if (dockSlots[i] == null) {
-          dockSlots[i] = index;
-          iconPositions.remove(index); // Clear from free space positions
-          return;
-        }
+      if (!dockSlots.contains(index)) {
+        dockSlots.add(index); // Add back to dock
+        dockSlots.sort(); // Keep dock in original order
       }
+      iconPositions.remove(index); // Remove from floating position
     } else {
-      iconPositions[index] = offset; // Keep icon in free space if not near dock
+      iconPositions[index] = offset; // Keep icon in floating space
     }
   }
 
